@@ -1,22 +1,12 @@
 import * as asn1js from "asn1js";
 import * as pkijs from "pkijs";
-import { createHash } from "node:crypto";
-
-const SIGNING_CERTIFICATE_V2_OID = "1.2.840.113549.1.9.16.2.47";
-const SIGNING_TIME_OID = "1.2.840.113549.1.9.5";
-const SHA256_OID = "2.16.840.1.101.3.4.2.1";
-const SHA1_OID = "1.3.14.3.2.26";
-const SHA384_OID = "2.16.840.1.101.3.4.2.2";
-const SHA512_OID = "2.16.840.1.101.3.4.2.3";
-const SHA224_OID = "2.16.840.1.101.3.4.2.4";
-
-const HASH_ALG_BY_OID: Record<string, string> = {
-  [SHA1_OID]: "sha1",
-  [SHA224_OID]: "sha224",
-  [SHA256_OID]: "sha256",
-  [SHA384_OID]: "sha384",
-  [SHA512_OID]: "sha512",
-};
+import { createHash, timingSafeEqual } from "node:crypto";
+import {
+  NODE_HASH_BY_OID,
+  OID_SHA256,
+  OID_SIGNING_CERTIFICATE_V2,
+  OID_SIGNING_TIME,
+} from "./oids.js";
 
 export interface CmsVerificationOutcome {
   valid: boolean;
@@ -24,6 +14,16 @@ export interface CmsVerificationOutcome {
   signerCert: pkijs.Certificate;
   signedAt: Date | null;
   digestAlgorithmOid: string | null;
+}
+
+/**
+ * Convenience accessor for a CMS SignerInfo's signed-attributes list. Returns
+ * `[]` when any link in the path is missing.
+ */
+export function signedAttributesOf(
+  signedData: pkijs.SignedData,
+): pkijs.Attribute[] {
+  return signedData.signerInfos?.[0]?.signedAttrs?.attributes ?? [];
 }
 
 /**
@@ -112,7 +112,6 @@ function pickSignerCert(signedData: pkijs.SignedData): pkijs.Certificate | null 
   const signerInfo = signedData.signerInfos?.[0];
   if (!signerInfo) return certs[0] ?? null;
 
-  // Try to match by IssuerAndSerialNumber from SignerInfo.sid.
   const sid = signerInfo.sid as unknown;
   if (sid instanceof pkijs.IssuerAndSerialNumber) {
     for (const cert of certs) {
@@ -130,15 +129,12 @@ function pickSignerCert(signedData: pkijs.SignedData): pkijs.Certificate | null 
 function extractDigestAlgorithmOid(
   signedData: pkijs.SignedData,
 ): string | null {
-  const signerInfo = signedData.signerInfos?.[0];
-  if (!signerInfo) return null;
-  return signerInfo.digestAlgorithm.algorithmId ?? null;
+  return signedData.signerInfos?.[0]?.digestAlgorithm.algorithmId ?? null;
 }
 
 function extractSigningTime(signedData: pkijs.SignedData): Date | null {
-  const attrs = signedData.signerInfos?.[0]?.signedAttrs?.attributes ?? [];
-  for (const attr of attrs) {
-    if (attr.type !== SIGNING_TIME_OID) continue;
+  for (const attr of signedAttributesOf(signedData)) {
+    if (attr.type !== OID_SIGNING_TIME) continue;
     const value = attr.values?.[0];
     if (!value) continue;
     if (value instanceof asn1js.UTCTime) return value.toDate();
@@ -161,11 +157,10 @@ function verifySigningCertificateV2(
   signedData: pkijs.SignedData,
   signerCert: pkijs.Certificate,
 ): string | null {
-  const attrs = signedData.signerInfos?.[0]?.signedAttrs?.attributes ?? [];
-  const sigCertAttr = attrs.find((a) => a.type === SIGNING_CERTIFICATE_V2_OID);
+  const sigCertAttr = signedAttributesOf(signedData).find(
+    (a) => a.type === OID_SIGNING_CERTIFICATE_V2,
+  );
 
-  // SODs typically lack signingCertificateV2 — that's OK for ICAO eMRTD.
-  // PAdES B-B requires it; the PAdES caller enforces presence separately.
   if (!sigCertAttr) return null;
 
   const value = sigCertAttr.values?.[0];
@@ -188,12 +183,11 @@ function verifySigningCertificateV2(
     return "signingCertificateV2 contains no ESSCertIDv2 entries";
   }
 
-  let hashOid = SHA256_OID;
+  let hashOid = OID_SHA256;
   let certHashOctets: asn1js.OctetString | undefined;
   const inner = firstCertId.valueBlock.value;
   let cursor = 0;
 
-  // Optional AlgorithmIdentifier
   if (inner[cursor] instanceof asn1js.Sequence) {
     const algSeq = inner[cursor] as asn1js.Sequence;
     const oid = algSeq.valueBlock.value[0] as asn1js.ObjectIdentifier | undefined;
@@ -201,7 +195,6 @@ function verifySigningCertificateV2(
     cursor++;
   }
 
-  // certHash (OCTET STRING) is required
   if (inner[cursor] instanceof asn1js.OctetString) {
     certHashOctets = inner[cursor] as asn1js.OctetString;
     cursor++;
@@ -212,25 +205,18 @@ function verifySigningCertificateV2(
   }
 
   const expected = new Uint8Array(certHashOctets.valueBlock.valueHexView);
-  const nodeAlg = HASH_ALG_BY_OID[hashOid];
+  const nodeAlg = NODE_HASH_BY_OID[hashOid];
   if (!nodeAlg) {
     return `signingCertificateV2 unsupported hash algorithm OID ${hashOid}`;
   }
 
-  const certDerBuf = signerCert.toSchema(true).toBER(false);
-  const certDer = new Uint8Array(certDerBuf);
-  const computed = new Uint8Array(
-    createHash(nodeAlg).update(certDer).digest(),
-  );
+  const certDer = new Uint8Array(signerCert.toSchema(true).toBER(false));
+  const computed = new Uint8Array(createHash(nodeAlg).update(certDer).digest());
 
   if (computed.length !== expected.length) {
     return `signingCertificateV2 cert hash length mismatch (alg=${nodeAlg})`;
   }
-  let diff = 0;
-  for (let i = 0; i < computed.length; i++) {
-    diff |= (computed[i] as number) ^ (expected[i] as number);
-  }
-  if (diff !== 0) {
+  if (!timingSafeEqual(computed, expected)) {
     return "signingCertificateV2 cert hash does not match embedded signer certificate";
   }
   return null;

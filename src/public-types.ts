@@ -1,9 +1,7 @@
-export type DerBytes = Uint8Array;
-
 export interface PassiveVerificationInput {
-  rawSod: DerBytes;
-  dataGroups: Record<number, DerBytes>;
-  trustAnchors: DerBytes[];
+  rawSod: Uint8Array;
+  dataGroups: Record<number, Uint8Array>;
+  trustAnchors: Uint8Array[];
 }
 
 export interface DataGroupVerificationResult {
@@ -27,8 +25,8 @@ export interface PassiveVerificationResult {
 }
 
 export interface PadesVerificationInput {
-  pdf: DerBytes;
-  trustAnchors: DerBytes[];
+  pdf: Uint8Array;
+  trustAnchors: Uint8Array[];
 }
 
 export interface PadesVerificationResult {

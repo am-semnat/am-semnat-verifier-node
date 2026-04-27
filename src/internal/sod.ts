@@ -1,5 +1,7 @@
 import * as asn1js from "asn1js";
 import * as pkijs from "pkijs";
+import { toArrayBuffer } from "./bytes.js";
+import { OID_SIGNED_DATA } from "./oids.js";
 
 export interface SodContents {
   /** The Document Signing Certificate extracted from the CMS. */
@@ -36,13 +38,6 @@ function unwrapEmrtdSod(bytes: ArrayBuffer): ArrayBuffer {
   return view.slice(lenOffset).buffer;
 }
 
-function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  return bytes.buffer.slice(
-    bytes.byteOffset,
-    bytes.byteOffset + bytes.byteLength,
-  ) as ArrayBuffer;
-}
-
 /**
  * Parse an SOD (Security Object Document) from CMS DER bytes.
  *
@@ -59,7 +54,7 @@ export function parseSod(rawSod: Uint8Array): SodContents {
   }
 
   const contentInfo = new pkijs.ContentInfo({ schema: asn1.result });
-  if (contentInfo.contentType !== "1.2.840.113549.1.7.2") {
+  if (contentInfo.contentType !== OID_SIGNED_DATA) {
     throw new Error(
       `SOD is not SignedData: contentType=${contentInfo.contentType}`,
     );

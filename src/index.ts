@@ -1,8 +1,8 @@
 import * as pkijs from "pkijs";
 
 // pkijs needs WebCrypto wired in once at module load — Node 20+ exposes it
-// globally as `globalThis.crypto` (subset implementing SubtleCrypto). Without
-// this, signedData.verify() silently throws "no engine" on the first call.
+// globally as `globalThis.crypto`. Without this, signedData.verify() silently
+// throws "no engine" on the first call.
 const cryptoEngine = (globalThis as unknown as { crypto?: Crypto }).crypto;
 if (cryptoEngine?.subtle) {
   pkijs.setEngine(
@@ -19,7 +19,6 @@ export { verifyPassive } from "./passive.js";
 export { verifyPadesSignatures } from "./pades.js";
 
 export type {
-  DerBytes,
   PassiveVerificationInput,
   PassiveVerificationResult,
   DataGroupVerificationResult,

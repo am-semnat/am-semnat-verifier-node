@@ -1,31 +1,6 @@
-import { createHash } from "node:crypto";
-import { hashAlgorithmFromOid } from "./certificate.js";
+import { createHash, timingSafeEqual } from "node:crypto";
+import { nodeHashAlgFromOid } from "./certificate.js";
 import type { DataGroupVerificationResult } from "../public-types.js";
-
-const NODE_HASH_MAP: Record<string, string> = {
-  "SHA-1": "sha1",
-  "SHA-224": "sha224",
-  "SHA-256": "sha256",
-  "SHA-384": "sha384",
-  "SHA-512": "sha512",
-};
-
-function computeHash(data: Uint8Array, algorithm: string): Uint8Array {
-  const nodeAlg = NODE_HASH_MAP[algorithm];
-  if (!nodeAlg) {
-    throw new Error(`Unsupported hash algorithm: ${algorithm}`);
-  }
-  return new Uint8Array(createHash(nodeAlg).update(data).digest());
-}
-
-function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false;
-  let result = 0;
-  for (let i = 0; i < a.length; i++) {
-    result |= (a[i] as number) ^ (b[i] as number);
-  }
-  return result === 0;
-}
 
 /**
  * Verify that the provided raw data group bytes match the hashes signed in the
@@ -42,7 +17,7 @@ export function verifyDataGroupHashes(
   expectedHashes: Map<number, Uint8Array>,
   providedDgs: Map<number, Uint8Array>,
 ): DataGroupVerificationResult[] {
-  const algorithm = hashAlgorithmFromOid(hashAlgorithmOid);
+  const algorithm = nodeHashAlgFromOid(hashAlgorithmOid);
   const results: DataGroupVerificationResult[] = [];
 
   for (const [dgNumber, provided] of providedDgs) {
@@ -56,8 +31,13 @@ export function verifyDataGroupHashes(
       continue;
     }
     try {
-      const computed = computeHash(provided, algorithm);
-      if (constantTimeEqual(computed, expectedHash)) {
+      const computed = new Uint8Array(
+        createHash(algorithm).update(provided).digest(),
+      );
+      if (
+        computed.length === expectedHash.length &&
+        timingSafeEqual(computed, expectedHash)
+      ) {
         results.push({ dgNumber, valid: true });
       } else {
         results.push({
