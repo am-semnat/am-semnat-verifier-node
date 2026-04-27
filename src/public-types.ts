@@ -15,6 +15,12 @@ export interface DataGroupVerificationResult {
 export interface PassiveVerificationResult {
   valid: boolean;
   errors: string[];
+  /** SOD CMS signature verified against the embedded DSC. */
+  signatureValid: boolean;
+  /** DSC chained to a caller-supplied CSCA anchor. */
+  certificateValid: boolean;
+  /** Every DG hash recomputation matched the SOD-signed value. */
+  hashesValid: boolean;
   signerCommonName: string | null;
   signedAt: Date | null;
   dataGroupResults: DataGroupVerificationResult[];

@@ -29,9 +29,13 @@ function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
 
 /**
  * Verify that the provided raw data group bytes match the hashes signed in the
- * SOD's LDS Security Object. Returns a per-DG outcome list covering every DG
- * the SOD claims a hash for — DGs the caller didn't supply are reported as
- * `valid: false` so the caller can spot omissions.
+ * SOD's LDS Security Object. Only the DGs the caller supplies are checked —
+ * a SOD that signs hashes for DGs not in `providedDgs` is normal (Romanian
+ * CEI cards list DG3/DG7 hashes the mobile SDK never reads), and DGs in the
+ * SOD without a hash entry would be a SOD bug, not the caller's problem.
+ *
+ * A provided DG with no matching SOD hash IS flagged — that suggests the
+ * caller's bytes are mislabeled or out of scope.
  */
 export function verifyDataGroupHashes(
   hashAlgorithmOid: string,
@@ -41,16 +45,8 @@ export function verifyDataGroupHashes(
   const algorithm = hashAlgorithmFromOid(hashAlgorithmOid);
   const results: DataGroupVerificationResult[] = [];
 
-  const dgNumbers = new Set<number>([
-    ...expectedHashes.keys(),
-    ...providedDgs.keys(),
-  ]);
-  const ordered = [...dgNumbers].sort((a, b) => a - b);
-
-  for (const dgNumber of ordered) {
+  for (const [dgNumber, provided] of providedDgs) {
     const expectedHash = expectedHashes.get(dgNumber);
-    const provided = providedDgs.get(dgNumber);
-
     if (!expectedHash) {
       results.push({
         dgNumber,
@@ -59,15 +55,6 @@ export function verifyDataGroupHashes(
       });
       continue;
     }
-    if (!provided) {
-      results.push({
-        dgNumber,
-        valid: false,
-        error: `DG${dgNumber} hash present in SOD but no bytes provided`,
-      });
-      continue;
-    }
-
     try {
       const computed = computeHash(provided, algorithm);
       if (constantTimeEqual(computed, expectedHash)) {
@@ -88,5 +75,5 @@ export function verifyDataGroupHashes(
     }
   }
 
-  return results;
+  return results.sort((a, b) => a.dgNumber - b.dgNumber);
 }

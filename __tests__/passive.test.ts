@@ -57,17 +57,19 @@ describe("verifyPassive", () => {
     );
   });
 
-  it("flags a DG present in the SOD but missing from the input", async () => {
+  it("verifies only the DGs the caller provides — extras in the SOD are not flagged", async () => {
+    // Romanian CEI cards include DG3/DG7 hashes in the SOD that the mobile
+    // SDK never reads. The verifier must not require those to be supplied.
     const fixture = await buildPassiveFixture({ dropDg: 14 });
     const result = await verifyPassive({
       rawSod: fixture.rawSod,
       dataGroups: fixture.dataGroups,
       trustAnchors: fixture.trustAnchors,
     });
-    expect(result.valid).toBe(false);
-    const dg14 = result.dataGroupResults.find((r) => r.dgNumber === 14);
-    expect(dg14?.valid).toBe(false);
-    expect(dg14?.error).toMatch(/no bytes provided/);
+    expect(result.valid).toBe(true);
+    expect(result.dataGroupResults.map((r) => r.dgNumber)).toEqual([1, 2]);
+    expect(result.dataGroupResults.every((r) => r.valid)).toBe(true);
+    expect(result.errors).toEqual([]);
   });
 
   it("returns a single SOD-parse error for malformed bytes", async () => {

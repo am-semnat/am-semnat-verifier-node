@@ -25,6 +25,9 @@ export async function verifyPassive(
   let signerCommonName: string | null = null;
   let signedAt: Date | null = null;
   let dataGroupResults: DataGroupVerificationResult[] = [];
+  let signatureValid = false;
+  let certificateValid = false;
+  let hashesValid = false;
 
   let sodContents;
   try {
@@ -34,6 +37,9 @@ export async function verifyPassive(
     return {
       valid: false,
       errors,
+      signatureValid,
+      certificateValid,
+      hashesValid,
       signerCommonName,
       signedAt,
       dataGroupResults,
@@ -43,16 +49,16 @@ export async function verifyPassive(
   signerCommonName = commonNameOf(sodContents.dsc);
 
   const cmsOutcome = await verifyCmsSignedData(sodContents.signedData);
+  signatureValid = cmsOutcome.valid;
   signedAt = cmsOutcome.signedAt;
   if (!cmsOutcome.valid && cmsOutcome.error) {
     errors.push(cmsOutcome.error);
   }
 
-  let chainValid = false;
   try {
     const anchors = parseAnchors(input.trustAnchors);
     const chainResult = await verifyCertificateChain(sodContents.dsc, anchors);
-    chainValid = chainResult.valid;
+    certificateValid = chainResult.valid;
     if (!chainResult.valid && chainResult.error) {
       errors.push(`Certificate chain: ${chainResult.error}`);
     }
@@ -74,17 +80,20 @@ export async function verifyPassive(
     for (const r of dataGroupResults) {
       if (!r.valid && r.error) errors.push(r.error);
     }
+    hashesValid =
+      dataGroupResults.length > 0 && dataGroupResults.every((r) => r.valid);
   } catch (e) {
     errors.push(describe("Hash verification error", e));
   }
 
-  const allDgsValid =
-    dataGroupResults.length > 0 && dataGroupResults.every((r) => r.valid);
-  const valid = cmsOutcome.valid && chainValid && allDgsValid;
+  const valid = signatureValid && certificateValid && hashesValid;
 
   return {
     valid,
     errors,
+    signatureValid,
+    certificateValid,
+    hashesValid,
     signerCommonName,
     signedAt,
     dataGroupResults,

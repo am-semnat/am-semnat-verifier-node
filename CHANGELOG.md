@@ -25,10 +25,22 @@ Initial release.
   `signedAt`) and trust-anchor format (flat DER list, auto-classified by
   self-signedness) match the mobile SDKs' `verifyPassiveOffline` for
   cross-platform parity.
+- `PassiveVerificationResult` additionally surfaces granular outcome
+  flags (`signatureValid`, `certificateValid`, `hashesValid`) and a
+  per-DG breakdown (`dataGroupResults`). Server-side dogfooding showed
+  consumers want to attribute failure to a specific stage (chain vs.
+  signature vs. hash) when surfacing `/auth/verify` errors; the rolled-up
+  `valid` alone wasn't enough.
 - Strict ETSI EN 319 122 `signingCertificateV2` binding check for PAdES
   signatures — the embedded signer cert must match the cert hash signed
   into the attribute. Without this check an attacker who swaps the
   embedded cert still passes pkijs's default CMS verify.
+- `verifyPassive` checks only the DGs the caller supplies. SOD-listed
+  DGs not in the input are not flagged — Romanian CEI cards include
+  DG3/DG7 hashes the mobile SDK never reads, so requiring all of them
+  would force consumers to read every data group whether they need it
+  or not. A provided DG missing from the SOD IS flagged (suggests
+  caller's bytes are mislabeled).
 
 ### Out of scope for 0.1.0
 

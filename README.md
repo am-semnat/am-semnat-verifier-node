@@ -20,6 +20,19 @@ This package ships **zero MAI trust material**. Consumers fetch the
 current CSCA Romania (DGP) and RO CEI MAI Root/Sub-CA (DGEP) certs
 themselves from the official MAI publication points.
 
+- **DGP — `CSCA Romania`**, published at
+  <https://pasapoarte.mai.gov.ro/csca.html>. Self-signed ICAO CSCA that
+  issues the Document Signer embedded in the eMRTD SOD. This is the
+  trust anchor for `verifyPassive(...)`.
+- **DGEP — `RO CEI MAI Root-CA` / `Sub-CA`**, published at
+  <https://hub.mai.gov.ro/cei/info/descarca-cert>. Issues the
+  per-citizen signing certificates stored in the CEI applet and used by
+  `AmSemnat.sign(...)`; those are the anchors for verifying the PAdES
+  signatures the SDK produces.
+
+Your app owns freshness and revocation — re-fetch on a cadence
+appropriate for your trust window.
+
 ## Install
 
 ```bash
