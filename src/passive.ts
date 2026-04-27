@@ -72,7 +72,7 @@ export async function verifyPassive(
       const n = Number(key);
       if (Number.isFinite(n) && bytes) providedDgs.set(n, bytes);
     }
-    dataGroupResults = verifyDataGroupHashes(
+    dataGroupResults = await verifyDataGroupHashes(
       sodContents.hashAlgorithmOid,
       sodContents.dataGroupHashes,
       providedDgs,

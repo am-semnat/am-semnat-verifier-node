@@ -1,8 +1,8 @@
 import * as asn1js from "asn1js";
 import * as pkijs from "pkijs";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { constantTimeEqual } from "./bytes.js";
 import {
-  NODE_HASH_BY_OID,
+  WEBCRYPTO_HASH_BY_OID,
   OID_SHA256,
   OID_SIGNING_CERTIFICATE_V2,
   OID_SIGNING_TIME,
@@ -53,7 +53,7 @@ export async function verifyCmsSignedData(
     };
   }
 
-  const bindingError = verifySigningCertificateV2(signedData, signerCert);
+  const bindingError = await verifySigningCertificateV2(signedData, signerCert);
   if (bindingError) {
     return {
       valid: false,
@@ -153,10 +153,10 @@ function extractSigningTime(signedData: pkijs.SignedData): Date | null {
  * specific MIME types — we accept this case for SOD compatibility but
  * tighten it for PAdES via the caller, which always has signedAttrs).
  */
-function verifySigningCertificateV2(
+async function verifySigningCertificateV2(
   signedData: pkijs.SignedData,
   signerCert: pkijs.Certificate,
-): string | null {
+): Promise<string | null> {
   const sigCertAttr = signedAttributesOf(signedData).find(
     (a) => a.type === OID_SIGNING_CERTIFICATE_V2,
   );
@@ -205,18 +205,20 @@ function verifySigningCertificateV2(
   }
 
   const expected = new Uint8Array(certHashOctets.valueBlock.valueHexView);
-  const nodeAlg = NODE_HASH_BY_OID[hashOid];
-  if (!nodeAlg) {
+  const webCryptoAlg = WEBCRYPTO_HASH_BY_OID[hashOid];
+  if (!webCryptoAlg) {
     return `signingCertificateV2 unsupported hash algorithm OID ${hashOid}`;
   }
 
   const certDer = new Uint8Array(signerCert.toSchema(true).toBER(false));
-  const computed = new Uint8Array(createHash(nodeAlg).update(certDer).digest());
+  const computed = new Uint8Array(
+    await crypto.subtle.digest(webCryptoAlg, certDer),
+  );
 
   if (computed.length !== expected.length) {
-    return `signingCertificateV2 cert hash length mismatch (alg=${nodeAlg})`;
+    return `signingCertificateV2 cert hash length mismatch (alg=${webCryptoAlg})`;
   }
-  if (!timingSafeEqual(computed, expected)) {
+  if (!constantTimeEqual(computed, expected)) {
     return "signingCertificateV2 cert hash does not match embedded signer certificate";
   }
   return null;

@@ -1,5 +1,5 @@
-import { createHash, timingSafeEqual } from "node:crypto";
-import { nodeHashAlgFromOid } from "./certificate.js";
+import { constantTimeEqual, toArrayBuffer } from "./bytes.js";
+import { webCryptoHashAlgFromOid } from "./certificate.js";
 import type { DataGroupVerificationResult } from "../public-types.js";
 
 /**
@@ -12,12 +12,12 @@ import type { DataGroupVerificationResult } from "../public-types.js";
  * A provided DG with no matching SOD hash IS flagged — that suggests the
  * caller's bytes are mislabeled or out of scope.
  */
-export function verifyDataGroupHashes(
+export async function verifyDataGroupHashes(
   hashAlgorithmOid: string,
   expectedHashes: Map<number, Uint8Array>,
   providedDgs: Map<number, Uint8Array>,
-): DataGroupVerificationResult[] {
-  const algorithm = nodeHashAlgFromOid(hashAlgorithmOid);
+): Promise<DataGroupVerificationResult[]> {
+  const algorithm = webCryptoHashAlgFromOid(hashAlgorithmOid);
   const results: DataGroupVerificationResult[] = [];
 
   for (const [dgNumber, provided] of providedDgs) {
@@ -32,12 +32,9 @@ export function verifyDataGroupHashes(
     }
     try {
       const computed = new Uint8Array(
-        createHash(algorithm).update(provided).digest(),
+        await crypto.subtle.digest(algorithm, toArrayBuffer(provided)),
       );
-      if (
-        computed.length === expectedHash.length &&
-        timingSafeEqual(computed, expectedHash)
-      ) {
+      if (constantTimeEqual(computed, expectedHash)) {
         results.push({ dgNumber, valid: true });
       } else {
         results.push({

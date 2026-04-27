@@ -1,10 +1,10 @@
 import * as pkijs from "pkijs";
 import * as asn1js from "asn1js";
 import { toArrayBuffer } from "./bytes.js";
-import { NODE_HASH_BY_OID, OID_COMMON_NAME } from "./oids.js";
+import { WEBCRYPTO_HASH_BY_OID, OID_COMMON_NAME } from "./oids.js";
 
-export function nodeHashAlgFromOid(oid: string): string {
-  const name = NODE_HASH_BY_OID[oid];
+export function webCryptoHashAlgFromOid(oid: string): string {
+  const name = WEBCRYPTO_HASH_BY_OID[oid];
   if (!name) {
     throw new Error(`Unknown hash algorithm OID: ${oid}`);
   }

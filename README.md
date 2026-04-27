@@ -1,7 +1,8 @@
 # `@amsemnat/verifier-node`
 
-Pure-Node verifier for Romanian eID artifacts produced by the
-[am-semnat](https://amsemnat.ro) SDKs.
+Verifier for Romanian eID artifacts produced by the
+[am-semnat](https://amsemnat.ro) SDKs. Pure JavaScript, runs unchanged
+in Node 20+, modern browsers, Cloudflare Workers, Deno, and Bun.
 
 Two operations:
 
@@ -39,7 +40,8 @@ appropriate for your trust window.
 npm install @amsemnat/verifier-node
 ```
 
-Requires Node 20 LTS or newer. ESM-only.
+ESM-only. Server-side: Node 20 LTS or newer (for native
+`globalThis.crypto.subtle`). Client-side: any evergreen browser.
 
 ## Quick start — passive auth
 
@@ -64,7 +66,7 @@ if (!result.valid) {
 }
 ```
 
-## Quick start — PAdES signature
+## Quick start — PAdES signature (Node)
 
 ```ts
 import { readFileSync } from "node:fs";
@@ -84,6 +86,27 @@ for (const sig of results) {
       `signer="${sig.signerCommonName ?? "?"}" ` +
       `coversWholeDocument=${sig.coversWholeDocument}`,
   );
+}
+```
+
+## Quick start — PAdES signature (browser)
+
+```ts
+import { verifyPadesSignatures } from "@amsemnat/verifier-node";
+
+// Trust anchors fetched as static assets (DER), or bundled. Both work.
+const [root, sub] = await Promise.all([
+  fetch("/anchors/ro-cei-mai-root-ca.cer").then((r) => r.arrayBuffer()),
+  fetch("/anchors/ro-cei-mai-sub-ca.cer").then((r) => r.arrayBuffer()),
+]);
+
+async function onFile(file: File) {
+  const pdf = new Uint8Array(await file.arrayBuffer());
+  const results = await verifyPadesSignatures({
+    pdf,
+    trustAnchors: [new Uint8Array(root), new Uint8Array(sub)],
+  });
+  // render `results` in the UI
 }
 ```
 

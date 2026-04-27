@@ -7,7 +7,25 @@ Version numbers ship in lockstep with the sibling SDKs
 (`am-semnat-ios-sdk`, `am-semnat-android-sdk`, `@amsemnat/expo-sdk`)
 through the 0.x cycle.
 
-## 0.1.0 — Unreleased
+## 0.1.1 — 2026-04-27
+
+### Changed
+
+- Internal hashing migrated from `node:crypto` to WebCrypto
+  (`globalThis.crypto.subtle.digest`), and `timingSafeEqual` replaced with
+  a portable constant-time JS comparison. The package now runs unchanged
+  in Node 20+, modern browsers, Cloudflare Workers, Deno, and Bun.
+- Public API is unchanged. `verifyPassive` and `verifyPadesSignatures`
+  remain async; only internal helpers were migrated.
+
+### Removed
+
+- SHA-224 dropped from the supported hash algorithm set. WebCrypto does
+  not implement it, and Romanian CEI artifacts in the wild use SHA-256 —
+  no observed consumer impact. SHA-1, SHA-256, SHA-384, and SHA-512 stay
+  supported.
+
+## 0.1.0 — 2026-04-27
 
 Initial release.
 
